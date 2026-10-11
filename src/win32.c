@@ -4,10 +4,42 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 #include "snav.h"
 static Nav nav;
 static uint32_t frame[434*509];
-static HWND wnd,seedBox,genButton,randomButton,modeBox,status;
+static HWND wnd,seedBox,genButton,randomButton,modeBox,status,roomLabel;
+#ifdef SNAV_SCREEN_ONLY
+static const int screenOnly=1;
+#else
+static const int screenOnly=0;
+#endif
+static char configPath[MAX_PATH],configuredSeed[96]="INWARD";
+static HDC backDC;static HBITMAP backBitmap,originalBitmap;static int backWidth,backHeight;
+static int configuredFullscreen;
+static void config_init(void){
+ char *slash,model[32];GetModuleFileNameA(NULL,configPath,MAX_PATH);slash=strrchr(configPath,'\\');if(slash)slash[1]=0;
+ if(strlen(configPath)+10<MAX_PATH)strcat(configPath,"S-NAV.ini");
+ GetPrivateProfileStringA("navigator","seed","INWARD",configuredSeed,sizeof(configuredSeed),configPath);
+ nav_init(&nav,configuredSeed);GetPrivateProfileStringA("navigator","model","ultimate",model,sizeof(model),configPath);
+ nav.mode=!strcmp(model,"300")?1:!strcmp(model,"310")?2:!strcmp(model,"damaged")?0:3;
+ nav.mono=GetPrivateProfileIntA("navigator","monochrome",0,configPath)!=0;
+ configuredFullscreen=GetPrivateProfileIntA("navigator","fullscreen",0,configPath)!=0;
+}
+static void config_save(void){
+ const char *models[]={"damaged","300","310","ultimate"};
+ WritePrivateProfileStringA("navigator","seed",nav.seed,configPath);
+ WritePrivateProfileStringA("navigator","model",models[nav.mode],configPath);
+ WritePrivateProfileStringA("navigator","monochrome",nav.mono?"1":"0",configPath);
+}
+static void drop_buffer(void){if(backDC){SelectObject(backDC,originalBitmap);DeleteObject(backBitmap);DeleteDC(backDC);}backDC=NULL;backBitmap=NULL;backWidth=backHeight=0;}
+static int prepare_buffer(HDC dc,int w,int h){
+ if(w<=0||h<=0)return 0;
+ if(backDC&&w==backWidth&&h==backHeight)return 1;
+ drop_buffer();backDC=CreateCompatibleDC(dc);if(!backDC)return 0;
+ backBitmap=CreateCompatibleBitmap(dc,w,h);if(!backBitmap){DeleteDC(backDC);backDC=NULL;return 0;}
+ originalBitmap=(HBITMAP)SelectObject(backDC,backBitmap);backWidth=w;backHeight=h;return 1;
+}
 static int held[256],mouseKey,fullscreen=0;
 static RECT previous,displayRect;static LONG oldStyle;
 static DWORD lastTime;static double accumulator=0;
@@ -28,18 +60,20 @@ static const char *modes[]={"S-NAV (damaged)","S-NAV 300","S-NAV 310","S-NAV Ult
 static void clear_keys(void){memset(held,0,sizeof(held));mouseKey=0;}
 static void generate(int randomSeed){
  char seed[96];int mode=nav.mode,skin=nav.skin,mono=nav.mono;clear_keys();
- if(randomSeed){sprintf(seed,"%08lX%04lX",(unsigned long)GetTickCount(),(unsigned long)(rand()&65535));SetWindowTextA(seedBox,seed);}else GetWindowTextA(seedBox,seed,sizeof(seed));
- nav_init(&nav,seed);nav.mode=mode;nav.skin=skin;nav.mono=mono;accumulator=0;
+ if(randomSeed){sprintf(seed,"%08lX%04lX",(unsigned long)GetTickCount(),(unsigned long)(rand()&65535));if(seedBox)SetWindowTextA(seedBox,seed);}else if(seedBox)GetWindowTextA(seedBox,seed,sizeof(seed));else snprintf(seed,sizeof(seed),"%s",nav.seed);
+ nav_init(&nav,seed);nav.mode=mode;nav.skin=screenOnly?0:skin;nav.mono=mono;accumulator=0;config_save();
  SetFocus(wnd);InvalidateRect(wnd,NULL,FALSE);
 }
 static void layout_controls(void){
+ if(!wnd)return;
  RECT r;GetClientRect(wnd,&r);int w=r.right,h=r.bottom;
+ if(screenOnly)return;
  int bw=65,rw=68,mw=154,ew=w-bw-rw-mw-40;if(ew<65)ew=65;
  MoveWindow(seedBox,8,8,ew,25,TRUE);MoveWindow(genButton,ew+14,8,bw,25,TRUE);
  MoveWindow(randomButton,ew+bw+19,8,rw,25,TRUE);MoveWindow(modeBox,ew+bw+rw+24,8,mw,160,TRUE);
- MoveWindow(status,10,h-70,w-20,65,TRUE);
+ MoveWindow(status,10,h-70,w-20,65,TRUE);MoveWindow(roomLabel,10,39,w-20,22,TRUE);
  ShowWindow(seedBox,fullscreen?SW_HIDE:SW_SHOW);ShowWindow(genButton,fullscreen?SW_HIDE:SW_SHOW);
- ShowWindow(randomButton,fullscreen?SW_HIDE:SW_SHOW);ShowWindow(modeBox,fullscreen?SW_HIDE:SW_SHOW);ShowWindow(status,fullscreen?SW_HIDE:SW_SHOW);
+ ShowWindow(randomButton,fullscreen?SW_HIDE:SW_SHOW);ShowWindow(modeBox,fullscreen?SW_HIDE:SW_SHOW);ShowWindow(status,fullscreen?SW_HIDE:SW_SHOW);ShowWindow(roomLabel,fullscreen?SW_HIDE:SW_SHOW);
 }
 static void toggle_fullscreen(void){
  if(!fullscreen){MONITORINFO mi;mi.cbSize=sizeof(mi);GetWindowRect(wnd,&previous);oldStyle=GetWindowLongA(wnd,GWL_STYLE);
@@ -61,31 +95,37 @@ static void map_dialog(int save){
 }
 static void command(int id){
  switch(id){
- case ID_SKIN:nav.skin=!nav.skin;break;case ID_MONO:nav.mono=!nav.mono;break;
+ case ID_SKIN:if(!screenOnly)nav.skin=!nav.skin;break;case ID_MONO:nav.mono=!nav.mono;config_save();break;
  case ID_PAUSE:nav.paused=!nav.paused;clear_keys();break;case ID_RESET:generate(0);break;
  case ID_BATTERY:nav.battery=100;nav.power=1;break;case ID_LOAD:map_dialog(0);break;case ID_SAVE:map_dialog(1);break;
  case ID_FULLSCREEN:toggle_fullscreen();break;
  case ID_HELP:clear_keys();MessageBoxA(wnd,
- "Left / Right: turn\nUp / Down: forward / backward\nShift: move faster\nSpace: blink (173 can move)\nEnter: provoke 096\nTab: pause\nD: device / LCD view\nM: monochrome / game red contacts\nP: power\nB: fresh battery\nR: restart this seed\nN: random seed\nF11: full screen, Esc: leave full screen\n\nUltimate is the default and has SCP distance rings.\n300 reveals visited rooms. 310 reveals the full map.\nOnly Ultimate detects SCPs.\n\nMap seeds are repeatable SIMULATOR seeds, not exact game maps.\nNPC AI and encounters are simplified; no sound, combat, or game assets needed.","S-NAV controls",MB_OK);break;
+ "Left / Right: turn\nUp / Down: forward / backward\nShift: move faster\nSpace: blink (173 can move)\nEnter: provoke nearby 096\nTab: pause\nD: device / LCD view\nM: monochrome / game red contacts\nP: power\nB: fresh battery\nR: restart this seed\nN: random seed\nF11: full screen, Esc: leave full screen\n\nUltimate is the default and has SCP distance rings.\n300 reveals visited rooms. 310 reveals the full map.\nOnly Ultimate detects SCPs.\n\nNPCs appear through room events and timers.\n106 starts with a 12-17 minute timer.\nMap seeds are repeatable SIMULATOR seeds, not exact game maps.\nNPC AI and encounters are simplified; no sound, combat, or game assets needed.","S-NAV controls",MB_OK);break;
  }
  SetFocus(wnd);InvalidateRect(wnd,NULL,FALSE);
 }
 static void update_status(void){
- char s[512];NavContact c[5];int count=nav_contacts(&nav,c);
- sprintf(s,"%s  |  %s  |  Room %d, %d  |  %d contacts  |  Battery %s\r\nArrows: turn / move   Space: blink   Enter: provoke 096   Tab: pause   D: device view   F11: full screen\r\n%s",
+ char s[512],label[256];static char previousStatus[512],previousRoom[256];NavContact c[5];int count=nav_contacts(&nav,c);
+ if(screenOnly)return;
+ sprintf(s,"%s  |  %s  |  Room %d, %d  |  %d contacts  |  Battery %s\r\nArrows: turn / move   Space: blink   Enter: provoke nearby 096   Tab: pause   D: device view   F11: full screen\r\n%s",
  modes[nav.mode],!nav.power?"OFF":nav.paused?"PAUSED":"SIMULATION",(int)floor(nav.x/8+0.5),(int)floor(nav.y/8+0.5),count,nav.mode==3?"unlimited":nav.battery<=0?"empty":"active",nav.notice);
- SetWindowTextA(status,s);
+ if(strcmp(previousStatus,s)){SetWindowTextA(status,s);strcpy(previousStatus,s);}
+ snprintf(label,sizeof(label),"Current room: %s | %s | grid %d, %d",nav_zone_name((int)floor(nav.y/8+0.5)),nav_room_name(&nav,(int)floor(nav.x/8+0.5),(int)floor(nav.y/8+0.5)),(int)floor(nav.x/8+0.5),(int)floor(nav.y/8+0.5));
+ if(strcmp(previousRoom,label)){SetWindowTextA(roomLabel,label);strcpy(previousRoom,label);}
 }
 static void paint(void){
- PAINTSTRUCT ps;HDC dc=BeginPaint(wnd,&ps);RECT r;BITMAPINFO bi;int fw=nav.skin?434:SNAV_W,fh=nav.skin?509:SNAV_H;
- int top=fullscreen?0:42,bottom=fullscreen?0:78;double scale;int dw,dh;
- GetClientRect(wnd,&r);FillRect(dc,&r,(HBRUSH)GetStockObject(BLACK_BRUSH));
+ PAINTSTRUCT ps;HDC dc=BeginPaint(wnd,&ps),draw;RECT r;BITMAPINFO bi;int fw=nav.skin?434:SNAV_W,fh=nav.skin?509:SNAV_H;
+ int top=(fullscreen||screenOnly)?0:66,bottom=(fullscreen||screenOnly)?0:78;double scale;int dw,dh;
+ GetClientRect(wnd,&r);
+ if(!prepare_buffer(dc,r.right,r.bottom)){EndPaint(wnd,&ps);return;}draw=backDC;
+ FillRect(draw,&r,(HBRUSH)GetStockObject(BLACK_BRUSH));
  scale=fmin((double)r.right/fw,(double)(r.bottom-top-bottom)/fh);if(scale<0.1)scale=0.1;
  dw=(int)(fw*scale);dh=(int)(fh*scale);displayRect.left=(r.right-dw)/2;displayRect.top=top+(r.bottom-top-bottom-dh)/2;
  displayRect.right=displayRect.left+dw;displayRect.bottom=displayRect.top+dh;
  nav_render(&nav,frame,nav.skin);memset(&bi,0,sizeof(bi));bi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
  bi.bmiHeader.biWidth=fw;bi.bmiHeader.biHeight=-fh;bi.bmiHeader.biPlanes=1;bi.bmiHeader.biBitCount=32;bi.bmiHeader.biCompression=BI_RGB;
- SetStretchBltMode(dc,COLORONCOLOR);StretchDIBits(dc,displayRect.left,displayRect.top,dw,dh,0,0,fw,fh,frame,&bi,DIB_RGB_COLORS,SRCCOPY);
+ SetStretchBltMode(draw,COLORONCOLOR);StretchDIBits(draw,displayRect.left,displayRect.top,dw,dh,0,0,fw,fh,frame,&bi,DIB_RGB_COLORS,SRCCOPY);
+ BitBlt(dc,0,0,r.right,r.bottom,draw,0,0,SRCCOPY);
  EndPaint(wnd,&ps);
 }
 static int device_button(int sx,int sy){
@@ -111,7 +151,7 @@ static LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
  case WM_COMMAND:
   if(LOWORD(w)==ID_GEN){generate(0);return 0;}
   if(LOWORD(w)==ID_RANDOM){generate(1);return 0;}
-  if(LOWORD(w)==ID_MODE&&HIWORD(w)==CBN_SELCHANGE){nav.mode=(int)SendMessageA(modeBox,CB_GETCURSEL,0,0);SetFocus(h);return 0;}
+  if(LOWORD(w)==ID_MODE&&HIWORD(w)==CBN_SELCHANGE){nav.mode=(int)SendMessageA(modeBox,CB_GETCURSEL,0,0);config_save();SetFocus(h);return 0;}
   if(LOWORD(w)>=200)command(LOWORD(w));
   return 0;
  case WM_KEYDOWN:
@@ -121,7 +161,7 @@ static LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
    case VK_RETURN:nav_trigger096(&nav);break;case VK_TAB:command(ID_PAUSE);break;
    case 'D':command(ID_SKIN);break;case 'M':command(ID_MONO);break;case 'B':command(ID_BATTERY);break;
    case 'P':nav.power=!nav.power;break;case 'R':generate(0);break;case 'N':generate(1);break;
-   case VK_F11:toggle_fullscreen();break;case VK_ESCAPE:if(fullscreen)toggle_fullscreen();break;
+   case VK_F11:toggle_fullscreen();break;case VK_ESCAPE:if(fullscreen)toggle_fullscreen();else if(screenOnly)DestroyWindow(h);break;
    case VK_F1:command(ID_HELP);break;
   }return 0;
  case WM_KEYUP:if(w<256)held[w]=0;return 0;
@@ -138,31 +178,35 @@ static LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
   while(accumulator>=1.0/60){nav_step(&nav,in,1.0/60);accumulator-=1.0/60;}
   update_status();InvalidateRect(h,NULL,FALSE);return 0;}
  case WM_PAINT:paint();return 0;
- case WM_GETMINMAXINFO:((MINMAXINFO*)l)->ptMinTrackSize.x=480;((MINMAXINFO*)l)->ptMinTrackSize.y=430;return 0;
- case WM_DESTROY:KillTimer(h,1);PostQuitMessage(0);return 0;
+ case WM_SETCURSOR:if(screenOnly&&LOWORD(l)==HTCLIENT){SetCursor(NULL);return TRUE;}break;
+ case WM_GETMINMAXINFO:((MINMAXINFO*)l)->ptMinTrackSize.x=screenOnly?160:480;((MINMAXINFO*)l)->ptMinTrackSize.y=screenOnly?160:430;return 0;
+ case WM_DESTROY:KillTimer(h,1);drop_buffer();PostQuitMessage(0);return 0;
  }return DefWindowProcA(h,m,w,l);
 }
 int WINAPI WinMain(HINSTANCE instance,HINSTANCE prev,LPSTR cmd,int show){
- WNDCLASSA wc;MSG msg;HMENU menu,sim,view;HFONT font=(HFONT)GetStockObject(DEFAULT_GUI_FONT);int i;HWND controls[5];
- (void)prev;(void)cmd;nav_init(&nav,"INWARD");memset(&wc,0,sizeof(wc));wc.lpfnWndProc=proc;wc.hInstance=instance;wc.lpszClassName="InwardSNav";wc.hCursor=LoadCursor(NULL,IDC_ARROW);wc.hIcon=LoadIcon(NULL,IDI_APPLICATION);
+ WNDCLASSA wc;MSG msg;HMENU menu,sim,view;HFONT font=(HFONT)GetStockObject(DEFAULT_GUI_FONT);int i;HWND controls[6];
+ (void)prev;(void)cmd;config_init();memset(&wc,0,sizeof(wc));wc.lpfnWndProc=proc;wc.hInstance=instance;wc.lpszClassName="InwardSNav";wc.hCursor=LoadCursor(NULL,IDC_ARROW);wc.hIcon=LoadIcon(NULL,IDI_APPLICATION);
  RegisterClassA(&wc);menu=CreateMenu();sim=CreatePopupMenu();view=CreatePopupMenu();
  AppendMenuA(sim,MF_STRING,ID_PAUSE,"Pause / resume\tTab");AppendMenuA(sim,MF_STRING,ID_RESET,"Restart seed\tR");
  AppendMenuA(sim,MF_STRING,ID_BATTERY,"Fresh battery\tB");AppendMenuA(sim,MF_SEPARATOR,0,NULL);
  AppendMenuA(sim,MF_STRING,ID_LOAD,"Import room grid...");AppendMenuA(sim,MF_STRING,ID_SAVE,"Export room grid...");
  AppendMenuA(view,MF_STRING,ID_SKIN,"Device / LCD only\tD");AppendMenuA(view,MF_STRING,ID_MONO,"Monochrome / red contacts\tM");AppendMenuA(view,MF_STRING,ID_FULLSCREEN,"Full screen\tF11");
  AppendMenuA(menu,MF_POPUP,(UINT_PTR)sim,"Simulation");AppendMenuA(menu,MF_POPUP,(UINT_PTR)view,"Display");AppendMenuA(menu,MF_STRING,ID_HELP,"Help / controls");
- wnd=CreateWindowA("InwardSNav","S-NAV Simulator - Inward | prototype 0.1",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,CW_USEDEFAULT,CW_USEDEFAULT,660,740,NULL,menu,instance,NULL);
+ wnd=CreateWindowA("InwardSNav",screenOnly?"S-NAV Screen":"S-NAV Simulator - Inward | prototype 0.2",(screenOnly?(WS_POPUP|WS_THICKFRAME):WS_OVERLAPPEDWINDOW)|WS_CLIPCHILDREN,CW_USEDEFAULT,CW_USEDEFAULT,screenOnly?582:760,screenOnly?536:800,NULL,screenOnly?NULL:menu,instance,NULL);
  if(!wnd)return 1;
- SetPropA(wnd,"NAVMENU",menu);
- seedBox=CreateWindowA("EDIT","INWARD",WS_CHILD|WS_VISIBLE|WS_BORDER|ES_AUTOHSCROLL,0,0,1,1,wnd,(HMENU)ID_SEED,instance,NULL);SendMessageA(seedBox,EM_SETLIMITTEXT,95,0);
+ SetPropA(wnd,"NAVMENU",screenOnly?NULL:menu);
+ if(!screenOnly){
+ seedBox=CreateWindowA("EDIT",configuredSeed,WS_CHILD|WS_VISIBLE|WS_BORDER|ES_AUTOHSCROLL,0,0,1,1,wnd,(HMENU)ID_SEED,instance,NULL);SendMessageA(seedBox,EM_SETLIMITTEXT,95,0);
  genButton=CreateWindowA("BUTTON","Generate",WS_CHILD|WS_VISIBLE,0,0,1,1,wnd,(HMENU)ID_GEN,instance,NULL);
  randomButton=CreateWindowA("BUTTON","Random",WS_CHILD|WS_VISIBLE,0,0,1,1,wnd,(HMENU)ID_RANDOM,instance,NULL);
  modeBox=CreateWindowA("COMBOBOX","",WS_CHILD|WS_VISIBLE|CBS_DROPDOWNLIST,0,0,1,1,wnd,(HMENU)ID_MODE,instance,NULL);
  for(i=0;i<4;i++)SendMessageA(modeBox,CB_ADDSTRING,0,(LPARAM)modes[i]);
- SendMessageA(modeBox,CB_SETCURSEL,3,0);
+ SendMessageA(modeBox,CB_SETCURSEL,nav.mode,0);
  status=CreateWindowA("STATIC","",WS_CHILD|WS_VISIBLE,0,0,1,1,wnd,NULL,instance,NULL);
- controls[0]=seedBox;controls[1]=genButton;controls[2]=randomButton;controls[3]=modeBox;controls[4]=status;
- for(i=0;i<5;i++)SendMessageA(controls[i],WM_SETFONT,(WPARAM)font,TRUE);
- layout_controls();lastTime=GetTickCount();SetTimer(wnd,1,16,NULL);ShowWindow(wnd,show);SetFocus(wnd);
+ roomLabel=CreateWindowA("STATIC","",WS_CHILD|WS_VISIBLE,0,0,1,1,wnd,NULL,instance,NULL);
+ controls[5]=roomLabel;controls[0]=seedBox;controls[1]=genButton;controls[2]=randomButton;controls[3]=modeBox;controls[4]=status;
+ for(i=0;i<6;i++)SendMessageA(controls[i],WM_SETFONT,(WPARAM)font,TRUE);
+ }
+ layout_controls();update_status();lastTime=GetTickCount();SetTimer(wnd,1,16,NULL);ShowWindow(wnd,show);if(configuredFullscreen)toggle_fullscreen();SetFocus(wnd);
  while(GetMessageA(&msg,NULL,0,0)>0){TranslateMessage(&msg);DispatchMessageA(&msg);}return (int)msg.wParam;
 }

@@ -1,111 +1,148 @@
-S-NAV SIMULATOR 0.1 - by Inward 3D
+S-NAV SIMULATOR 0.2 - by Inward 3D
 
-START HERE
-Extract this entire ZIP, then double-click S-NAV.exe on a 64-bit Windows PC.
-No installation, Python, game installation, internet, or sound is needed.
-The executable contains the supplied device artwork and bitmap font.
-Default: Ultimate, LCD-only view, source-style green screen/red rings.
-Click the screen after editing the seed to return keyboard control to it.
+TWO EXECUTABLES
+Extract the ZIP, then choose:
 
-CONTROLS
-Left/right arrows  Turn smoothly
-Up/down arrows     Walk forward/backward in the direction you face
-Shift              Faster movement
-Space              Blink; lets an observed 173 move
-Enter              Provoke simulated 096; eight-second delay before pursuit
+S-NAV-Simulator.exe
+Configurable desktop version: seed box, Generate/Random, Navigator selector,
+current-room name and zone at the top, status, map import/export, display menu.
+
+S-NAV-Screen.exe
+Borderless, resizable LCD-only version: no menu, toolbar, room label or status.
+The mouse pointer is hidden over the LCD. F11 enters/exits full screen.
+Both executables are 64-bit DESKTOP WINDOWS builds. They are NOT Windows CE
+executables. A Recon ARM/CE port still needs its exact model and OS/SDK.
+
+SHARED SETTINGS
+Both read S-NAV.ini next to the executables. The desktop version saves the
+seed and model when you generate a map or select a different Navigator.
+The screen-only version uses those same settings next time it starts.
+Close/reopen it after changing settings; already-running instances do not sync.
+You can also edit the INI with Notepad:
+seed=any string
+model=damaged / 300 / 310 / ultimate
+monochrome=0 (game red rings) or 1 (dark rings)
+fullscreen=0 (window) or 1 (start full screen)
+Place the folder somewhere writable to allow settings to save.
+
+CONTROLS (BOTH BUILDS)
+Left/right arrows  Turn (2.6 radians/second, about 37% faster than v0.1)
+Up/down arrows     Forward/backward (4.2 units/second, 40% faster)
+Shift              Faster movement (7.2 units/second)
+Space              Blink
+Enter              Provoke an EXISTING 096 within 8 units; does not spawn one
 Tab                Pause/resume
-D                  Device artwork / LCD only
-M                  Monochrome / game-style red radar rings
+M                  Monochrome / red radar rings
 P                  Power on/off
 B                  Fresh battery
-R                  Restart the current seed
-N                  Generate a new random seed
-F11                Full screen
-Esc                Leave full screen
-F1                 Help
-The device artwork's D-pad is clickable/holdable; OK provokes 096,
-minus pauses, power toggles power, and the return button restarts.
-These button assignments belong to this simulator, not the original game.
+R                  Restart this seed
+N                  New random seed, also saved to INI
+F11                Full screen toggle
+Esc                Leave full screen; close screen-only window if already windowed
+D                  Device artwork toggle (configurable build only)
+F1                 Controls help, when explicitly pressed
+The configurable build's illustrated D-pad is holdable with the mouse.
+Its OK button provokes nearby 096; minus pauses; power toggles; return restarts.
+There is no sound in either build.
 
-SEEDS AND MAPS - IMPORTANT
-Any typed string generates a repeatable simulator map, including numeric
-strings. Numeric text is treated as a string in this build. The seed-to-number
-XOR/shift conversion comes from GenerateSeedNumber in your source.
-The base hallway algorithm is adapted from CreateMapLayout (18 x 18
-configured map extent, 19 x 19 occupied-grid storage).
-It uses a different PRNG, adds connectivity safeguards and approximate
-extra dead ends, and does not port ForceRooms, room templates, overlap
-correction, door permissions, events, or the complete Blitz3D random stream.
-Therefore the SAME seed does NOT currently give the SAME SCP-CB map.
-The simulator is a room-footprint exploration, not collision against detailed
-3D room meshes. Adjacent occupied rooms are traversable, without door logic.
+CHANGES IN 0.2
+- Split the configurable and LCD-only executables.
+- Added shared INI settings and a top current-room name/zone label.
+- Replaced drawing directly over a black clear with a persistent offscreen
+  bitmap and a single BitBlt. Status text updates only when changed.
+- Added circular collision against empty-cell walls AND corners. Radius 2.25
+  world units covers the arrow's 6-pixel/2-unit tip with a small raster margin.
+- Increased movement and turn speed.
+- Added a room catalog from the supplied Data/rooms.ini: shape, zone,
+  commonness, reserved placement fraction/priority, and no-decals flag.
+- Changed NPCs from nearby-at-start to inactive until room events/timers.
+- Added named-room tagged map import/export (SNAV-MAP-2).
 
-For an exact room footprint from an actual game session:
-1. Add game_map_export.bb's function to the game's source.
-2. Add ExportSNavGrid("facility.snavmap") after ConnectAdjacentRooms() at
-   the end of CreateMap() in MapSystem.bb, and rebuild/run that game.
-3. In this simulator, choose Simulation > Import room grid and select the file.
-This uses the game's final occupied grid; movement and NPCs remain simulated.
-The exporter is supplied as a snippet and has not been executed in Blitz3D.
-Maps must contain one connected component. A disconnected export is rejected,
-as this prototype has no teleport/elevator navigation between components.
-The importer requires a header SNAV-MAP-1 followed by 19 rows of 19 #/.
-characters. # means occupied, . means empty. Export is available in the menu.
-Imported grids are not retained by Restart; restart regenerates the seed map.
+NPC PLACEMENT AND TIMING
+173: specific room events, including room2closets, room2testroom2, probabilistic
+lockrooms and a small subset of tunnel/008 events. Each room trigger runs once.
+It does not start next to the player. Additional generic LCZ appearances are
+rare room-entry relocations: 8% chance after a 90-180 second cooldown, excluding
+start/checkpoint1. This is a deliberate low-frequency approximation of source
+waypoint relocation, not its exact per-frame RNG. 173 freezes when observed;
+its simulated active episode expires rather than repeatedly respawning nearby.
 
-NAVIGATOR MODELS
-S-NAV (damaged): discovered rooms, red player arrow, offline database notice.
-S-NAV 300: discovered rooms, offline database notice, battery.
-S-NAV 310: full nearby room map, battery, no SCP radar.
-Ultimate: full nearby room map and SCP proximity rings, unlimited battery.
-All variants show a local scrolling map, not the entire facility at once.
-Battery models drain at 0.35 percent/second, matching FPSfactor * 0.005
-with the source game's 70 FPS timing basis. B replenishes it.
+106: initial normal-difficulty timer is 12-17 minutes, directly from
+Main.bb: Curr106\State = 70 * 60 * Rand(12,17).
+The generic timer pauses in rooms with disabledecals=true, like the source.
+After a timed 45-second episode, the next cooldown derives from source
+Rand(22000,27000)/70, about 314-386 seconds. The exact source despawn depends
+on visibility, distance and difficulty; 45 seconds is our simplified episode.
+One selected LCZ endroom can give an earlier 12-second visual appearance;
+this does not enable instant global pursuit. 106 CAN appear in LCZ in the game.
+Not all of the game's many 106 room events are implemented in this build.
 
-NPC SIMULATION
-173 freezes within the simulated player's viewing cone and unblocked room
-line-of-sight. It approaches when unobserved or blinking. Automatic blinks
-occur every 4.5 seconds. This models visibility without a 3D camera.
-106 slowly approaches across walls.
-096 stays stationary until you press Enter; then waits eight seconds and
-pursues through connected rooms. Face visibility is NOT detected in this app.
-049 wanders, then pursues when close.
-A designated dead end represents 895 and causes local map interference.
-Contacts/encounters reset NPC placement, so you can keep exploring without
-a death screen. These are intentionally simplified behaviors, not full AI ports.
-NPC movement and radar distances respond to actual simulated positions.
+096: only spawns on entering an assigned eligible source room: HCZ server room,
+probabilistic HCZ tunnel/pit/pipes events, or the EZ open lockroom (lockroom2).
+No generated LCZ room has a 096 spawn trigger. An existing provoked 096 can
+pursue across zones; it is not globally teleported into LCZ at startup.
+It stays in its spawn room until you provoke it with Enter, waits eight
+seconds, then follows the room graph. Actual face/guard/animation logic is omitted.
 
-SOURCE DISPLAY RULES IMPLEMENTED
-Main.bb 6961-7174 contains the renderer.
-24 pixels per room, 8 world units per room => 3 pixels per world unit.
-Room borders are drawn only against empty neighbouring grid cells.
-Map stays north-up; player heading changes, map scrolls with movement.
-Player arrow: 6 px nose / 5 px rear vertices, +/- 140 degrees.
-Player arrow/database blink: visible 700 ms in each 1-second cycle.
-Ultimate SCP labels/rings: visible 400 ms in each 600-ms cycle.
-173: ceil(distance / 8) * 8; show only rounded distance < 32;
-     ring radius = rounded distance * 3 pixels.
-106, 096, 049: show raw distance < 32; radius = distance * 1.5 pixels.
-All rings are centred on the player, 7 pixels above the arrow centre.
-They do NOT indicate the bearing or exact screen position of an SCP.
-895: proximity interference is approximated; it is not the original random
-coffin rendering routine. Off-world location error screens are not implemented.
-049's HideFromNVG flag is not simulated. Vertical distance is not simulated.
-The game source uses EntityDistance, so height can affect a game's contacts.
+049: a room049 visit activates its HCZ chamber approximation. It does not
+wander out of a random spawn toward LCZ. The real chamber has vertical levels
+and elevator triggers; these are represented only by a 2D room-entry event.
 
-SOURCE AND BUILD
-src/snav.c      Portable simulation and map data, no Windows dependencies
-src/render.c    Portable software raster renderer
-src/win32.c     Desktop Windows controls, window and bitmap presentation
-src/assets.h    Embedded supplied image / rasterized DS-Digital glyphs
-src/snav.h      Shared API
-Build-windows.bat builds with MinGW-w64 GCC; all artwork is already embedded.
-An asset-generation script is included for development, but it expects your
-original uploads/reference tree. It is not needed to rebuild the executable.
-Run build-linux-tests.sh for the portable-core checks. See VERIFICATION.txt.
+895: assigned to an actual coffin template instead of an arbitrary dead end.
+Map interference near it remains approximate.
 
-RECON AND HARDWARE
-Read HARDWARE-ROADMAP.md. This executable is x86-64 DESKTOP WINDOWS.
-It will not run on ARM Windows CE/Windows Mobile.
-A Recon build needs the exact device model, CPU and OS version plus an
-appropriate CE SDK/compiler. No tested CE binary is included.
+All encounter resets return to room/cooldown logic, rather than picking a new
+random nearby room. Source event chances and special-room names are used where
+practical, but this remains a radar-location simulation, not a complete AI/event
+port. Doors, vertical levels, exact world offsets and scripts are not simulated.
+
+MAP FIDELITY
+Seeds are repeatable SIMULATOR seeds, not byte-for-byte SCP-CB maps.
+The seed string XOR/shift conversion comes from the source. The PRNG, extra
+connectivity/dead ends and room-placement collision resolution differ.
+Room names come from source shape/zone pools and approximate reserved positions;
+they are accurate catalog names but not guaranteed to match a game's same seed.
+You begin in the start dead end at grid 9,17.
+Numeric seed text is treated as a string, not a Blitz3D numeric seed override.
+
+EXACT GAME GRID AND ROOM NAMES
+The included game_map_export.bb is a source snippet to add to the game.
+Call ExportSNavGrid("facility.snavmap") after ConnectAdjacentRooms() at the
+end of CreateMap() in MapSystem.bb, rebuild/run the game, then import the file
+via the desktop build's Simulation menu. It exports the actual occupied grid
+AND room template names. The snippet has not been compiled in Blitz3D here.
+The simulator's movement and NPC event scheduling still remain approximations.
+Legacy SNAV-MAP-1 files work, but get estimated room names.
+The importer requires one connected 19x19 grid. Disconnected maps are rejected.
+Restart regenerates the seed map; imported maps are not saved as the default
+screen-only startup layout in this version.
+
+MAP FILE FORMAT
+SNAV-MAP-2
+19 rows of 19 #/. characters (occupied/empty)
+Then optional lines: x y room_template_name
+Every supplied name must be recognized in the source room catalog.
+The simulator's Export room grid writes this format.
+
+NAVIGATOR DISPLAY
+300: discovered rooms; offline database notice; battery.
+310: full local map; battery; no SCP detector.
+Ultimate: full local map; unlimited battery; SCP proximity rings.
+Damaged: discovered map and red arrow/notice.
+The map scrolls while heading changes; it remains north-up.
+Rooms are 24 logical pixels wide / 8 world units = 3 pixels per world unit.
+173 detection uses ceil(distance/8)*8 < 32 and radius=distance*3.
+106/096/049 use raw distance < 32 and radius=distance*1.5.
+Rings show distance, not SCP bearing or exact map position.
+The arrow/notice deliberately blink 700 ms on per second; radar blinks 400 ms
+on per 600 ms. Those are original source effects. The whole LCD should not
+flash black; only the marker/rings should disappear during their blink phases.
+
+BUILD / VERIFICATION
+Run build-windows.bat with MinGW-w64 GCC to rebuild both executables.
+No asset conversion is required: artwork/fonts/catalog are embedded.
+Portable code: src/snav.c, src/render.c, src/snav.h, src/room_data.h.
+Windows frontend: src/win32.c; SNAV_SCREEN_ONLY chooses the reduced frontend.
+Run build-linux-tests.sh to check the portable simulation.
+Read VERIFICATION.txt for exactly what was tested and remaining limitations.
+HARDWARE-ROADMAP.md carries the original Recon/custom-device plan.

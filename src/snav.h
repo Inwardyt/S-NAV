@@ -7,13 +7,16 @@
 #define SNAV_SKIN_W 434
 #define SNAV_SKIN_H 509
 #define SNAV_NPCS 4
+#define SNAV_PLAYER_RADIUS 2.25
 #define SNAV_PI 3.14159265358979323846
 /* Standalone simulator: map layout is source-derived, NPC AI is simplified. */
-typedef struct { double x,y,tx,ty,cooldown; int state; } NavNPC;
+typedef struct { double x,y,tx,ty,cooldown; int state,active,homeX,homeY; double lifetime; } NavNPC;
 typedef struct {
  unsigned char rooms[SNAV_GRID][SNAV_GRID],found[SNAV_GRID][SNAV_GRID];
+ unsigned short roomId[SNAV_GRID][SNAV_GRID];
+ unsigned char events[SNAV_GRID][SNAV_GRID],eventDone[SNAV_GRID][SNAV_GRID];
  uint32_t rng; char seed[96],notice[160];
- double x,y,yaw,time,blink,battery,eventTime; int mode,paused,power,mono,skin,coffinX,coffinY;
+ double x,y,yaw,time,blink,battery,eventTime,next106,next173; int lastRoomX,lastRoomY; int mode,paused,power,mono,skin,coffinX,coffinY;
  NavNPC npc[SNAV_NPCS];
 } Nav;
 typedef struct { int forward,back,left,right,run,blink; } NavInput;
@@ -23,6 +26,9 @@ void nav_step(Nav *n,NavInput in,double dt);
 void nav_trigger096(Nav *n);
 uint32_t nav_seed(const char *seed);
 int nav_room(const Nav *n,int x,int y);
+int nav_can_stand(const Nav *n,double x,double y);
+const char *nav_room_name(const Nav *n,int x,int y);
+const char *nav_zone_name(int y);
 int nav_contacts(const Nav *n,NavContact out[5]);
 void nav_render(const Nav *n,uint32_t *pixels,int skin);
 int nav_load_map(Nav *n,const char *path);
