@@ -6,9 +6,11 @@ if errorlevel 1 (
  pause
  exit /b 1
 )
-gcc -std=c99 -O2 -Wall -Wextra -Werror -static -mwindows src/win32.c src/snav.c src/render.c -lgdi32 -lcomdlg32 -lm -o S-NAV-Simulator.exe
+windres -I src src/snav.rc -O coff -o src/snav-res.o
 if errorlevel 1 exit /b 1
-gcc -std=c99 -O2 -Wall -Wextra -Werror -static -mwindows -DSNAV_SCREEN_ONLY src/win32.c src/snav.c src/render.c -lgdi32 -lcomdlg32 -lm -o S-NAV-Screen.exe
+gcc -std=c99 -O2 -Wall -Wextra -Werror -static -mwindows src/win32.c src/snav.c src/render.c src/snav-res.o -lgdi32 -lcomdlg32 -lm -o S-NAV-Simulator.exe
+if errorlevel 1 exit /b 1
+gcc -std=c99 -O2 -Wall -Wextra -Werror -static -mwindows -DSNAV_SCREEN_ONLY src/win32.c src/snav.c src/render.c src/snav-res.o -lgdi32 -lcomdlg32 -lm -o S-NAV-Screen.exe
 if errorlevel 1 exit /b 1
 echo Built S-NAV-Simulator.exe and S-NAV-Screen.exe
 pause

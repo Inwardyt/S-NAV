@@ -185,16 +185,18 @@ static LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){
 }
 int WINAPI WinMain(HINSTANCE instance,HINSTANCE prev,LPSTR cmd,int show){
  WNDCLASSA wc;MSG msg;HMENU menu,sim,view;HFONT font=(HFONT)GetStockObject(DEFAULT_GUI_FONT);int i;HWND controls[6];
- (void)prev;(void)cmd;config_init();memset(&wc,0,sizeof(wc));wc.lpfnWndProc=proc;wc.hInstance=instance;wc.lpszClassName="InwardSNav";wc.hCursor=LoadCursor(NULL,IDC_ARROW);wc.hIcon=LoadIcon(NULL,IDI_APPLICATION);
+ (void)prev;(void)cmd;config_init();memset(&wc,0,sizeof(wc));wc.lpfnWndProc=proc;wc.hInstance=instance;wc.lpszClassName="InwardSNav";wc.hCursor=LoadCursor(NULL,IDC_ARROW);wc.hIcon=LoadIconA(instance,MAKEINTRESOURCEA(101));
  RegisterClassA(&wc);menu=CreateMenu();sim=CreatePopupMenu();view=CreatePopupMenu();
  AppendMenuA(sim,MF_STRING,ID_PAUSE,"Pause / resume\tTab");AppendMenuA(sim,MF_STRING,ID_RESET,"Restart seed\tR");
  AppendMenuA(sim,MF_STRING,ID_BATTERY,"Fresh battery\tB");AppendMenuA(sim,MF_SEPARATOR,0,NULL);
  AppendMenuA(sim,MF_STRING,ID_LOAD,"Import room grid...");AppendMenuA(sim,MF_STRING,ID_SAVE,"Export room grid...");
  AppendMenuA(view,MF_STRING,ID_SKIN,"Device / LCD only\tD");AppendMenuA(view,MF_STRING,ID_MONO,"Monochrome / red contacts\tM");AppendMenuA(view,MF_STRING,ID_FULLSCREEN,"Full screen\tF11");
  AppendMenuA(menu,MF_POPUP,(UINT_PTR)sim,"Simulation");AppendMenuA(menu,MF_POPUP,(UINT_PTR)view,"Display");AppendMenuA(menu,MF_STRING,ID_HELP,"Help / controls");
- wnd=CreateWindowA("InwardSNav",screenOnly?"S-NAV Screen":"S-NAV Simulator - Inward | prototype 0.2",(screenOnly?(WS_POPUP|WS_THICKFRAME):WS_OVERLAPPEDWINDOW)|WS_CLIPCHILDREN,CW_USEDEFAULT,CW_USEDEFAULT,screenOnly?582:760,screenOnly?536:800,NULL,screenOnly?NULL:menu,instance,NULL);
+ wnd=CreateWindowA("InwardSNav",screenOnly?"S-NAV Screen":"S-NAV Simulator - Inward | prototype 0.2.1",(screenOnly?(WS_POPUP|WS_THICKFRAME):WS_OVERLAPPEDWINDOW)|WS_CLIPCHILDREN,CW_USEDEFAULT,CW_USEDEFAULT,screenOnly?582:760,screenOnly?536:800,NULL,screenOnly?NULL:menu,instance,NULL);
  if(!wnd)return 1;
  SetPropA(wnd,"NAVMENU",screenOnly?NULL:menu);
+ SendMessageA(wnd,WM_SETICON,ICON_BIG,(LPARAM)LoadImageA(instance,MAKEINTRESOURCEA(101),IMAGE_ICON,GetSystemMetrics(SM_CXICON),GetSystemMetrics(SM_CYICON),LR_SHARED));
+ SendMessageA(wnd,WM_SETICON,ICON_SMALL,(LPARAM)LoadImageA(instance,MAKEINTRESOURCEA(101),IMAGE_ICON,GetSystemMetrics(SM_CXSMICON),GetSystemMetrics(SM_CYSMICON),LR_SHARED));
  if(!screenOnly){
  seedBox=CreateWindowA("EDIT",configuredSeed,WS_CHILD|WS_VISIBLE|WS_BORDER|ES_AUTOHSCROLL,0,0,1,1,wnd,(HMENU)ID_SEED,instance,NULL);SendMessageA(seedBox,EM_SETLIMITTEXT,95,0);
  genButton=CreateWindowA("BUTTON","Generate",WS_CHILD|WS_VISIBLE,0,0,1,1,wnd,(HMENU)ID_GEN,instance,NULL);

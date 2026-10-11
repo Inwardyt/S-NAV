@@ -1,2 +1,2 @@
-258f5ca451b3c2d9e29b0dcbb0fb06e863cce85150ffe3f91b06f6d94840b5ad  S-NAV-Simulator.exe
-32e70849841dc2efbad7ddc260e65adb14e7742acf6836d82fd785cf57667f90  S-NAV-Screen.exe
+8eeb1744a1660d0ebec791d3bff56a8692497a3a4e7af3c92470072ff26ec9e1  S-NAV-Simulator.exe
+6a19ca3dbb922833133ba2d9238e718e701566ca3ebf43923cc2b1b6f93effbe  S-NAV-Screen.exe

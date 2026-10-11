@@ -1,4 +1,4 @@
-S-NAV SIMULATOR 0.2 - by Inward 3D
+S-NAV SIMULATOR 0.2.1 - by Inward 3D
 
 TWO EXECUTABLES
 Extract the ZIP, then choose:
@@ -146,3 +146,8 @@ Windows frontend: src/win32.c; SNAV_SCREEN_ONLY chooses the reduced frontend.
 Run build-linux-tests.sh to check the portable simulation.
 Read VERIFICATION.txt for exactly what was tested and remaining limitations.
 HARDWARE-ROADMAP.md carries the original Recon/custom-device plan.
+
+CHANGING THE ICON
+Replaced src/icon.ico, then run build-windows.bat with MinGW-w64 GCC and
+windres available. The resource is compiled into both executables.
+No separate icon.ico is needed when running the finished executables.
