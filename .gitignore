@@ -1,0 +1,6 @@
+*.exe
+*.o
+*.obj
+*.ppm
+__pycache__/
+S-NAV.ini
